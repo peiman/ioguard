@@ -1,0 +1,8 @@
+[[rules]]
+id = "homoglyph.mixed_script_confusable"
+category = "homoglyph"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Mixed-script confusable sequence detected (UTS#39). A word contains characters from multiple scripts where at least one is a known confusable lookalike."
+detect_mode = "builtin"

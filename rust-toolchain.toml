@@ -1,0 +1,14 @@
+# Pinned toolchain.
+#
+# The trybuild compile-fail snapshots in crates/*/tests/violations/*.stderr
+# capture exact compiler output, which changes between rustc versions. Pinning
+# the toolchain keeps those snapshots deterministic across every machine and CI
+# (and every downstream project scaffolded from this repo), so the architecture
+# violation tests don't break on an unrelated rustc release.
+#
+# To bump: change `channel`, refresh the snapshots with
+#   TRYBUILD=overwrite cargo test --workspace
+# and update the pinned version in .github/workflows/ci.yml to match.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]

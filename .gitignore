@@ -1,0 +1,10 @@
+.DS_Store
+.env
+*.log
+/fix-instrumentation.json
+/PLAN.md
+/redteam-instrumentation.json
+/redteam-report.json
+node_modules/
+target/
+.workhorse/

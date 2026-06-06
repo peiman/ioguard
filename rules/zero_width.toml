@@ -1,0 +1,53 @@
+[[rules]]
+id = "zero_width.zwsp"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Zero Width Space (U+200B)"
+detect_mode = "builtin"
+
+[[rules]]
+id = "zero_width.zwnj"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Zero Width Non-Joiner (U+200C)"
+detect_mode = "builtin"
+
+[[rules]]
+id = "zero_width.zwj"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Zero Width Joiner (U+200D) — blocked unless flanked by emoji"
+detect_mode = "builtin"
+
+[[rules]]
+id = "zero_width.bom"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Byte Order Mark (U+FEFF)"
+detect_mode = "builtin"
+
+[[rules]]
+id = "zero_width.soft_hyphen"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Soft Hyphen (U+00AD)"
+detect_mode = "builtin"
+
+[[rules]]
+id = "zero_width.invisible_format"
+category = "zero_width"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Invisible format character (Default_Ignorable_Code_Point)"
+detect_mode = "builtin"

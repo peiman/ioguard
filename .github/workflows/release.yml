@@ -1,0 +1,64 @@
+name: Release
+
+# CKSPEC-ENF-009: no release proceeds while conformance fails.
+#
+# The `publish` job is gated on `conform` (needs:), which re-runs the full
+# hermetic conformance gate — completeness, the ENF-008 anchoring check, the
+# ENF-010 report sync-check, and every mapped check. A red gate blocks the
+# release; a green one lets `publish` build and attach the binary.
+#
+# Minimal and hand-rolled on purpose — a goreleaser-shaped scaffold to grow
+# into. Today it ships a single linux/x86_64 binary; a target matrix is the
+# obvious next step. The load-bearing part is the gate, not the packaging.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  conform:
+    name: Conformance gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Conformance gate (must be green to release)
+        run: just conform
+
+  publish:
+    name: Publish release
+    needs: conform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      # build.rs derives the commit + date from git, so the release binary
+      # self-stamps its build identity (CKSPEC-OUT-006) — no manual env wiring.
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            target/release/ckeletin-rust

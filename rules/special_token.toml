@@ -1,0 +1,26 @@
+[[rules]]
+id = "special_token.chatml"
+category = "special_token"
+severity = "block"
+direction = "input"
+pattern = "BUILTIN"
+description = "ChatML control tokens (<|im_start|>, <|im_end|>, <|endoftext|>, <|system|>, <|user|>, <|assistant|>) — model turn-hijacking risk."
+detect_mode = "builtin"
+
+[[rules]]
+id = "special_token.inst_marker"
+category = "special_token"
+severity = "block"
+direction = "input"
+pattern = "BUILTIN"
+description = "LLM instruction markers ([INST], [/INST], <<SYS>>, <</SYS>>, <s>, </s>, <tool_call>, >>SYSTEM<<, >>USER<<, >>ASSISTANT<<) — model turn-hijacking risk."
+detect_mode = "builtin"
+
+[[rules]]
+id = "special_token.turn_marker"
+category = "special_token"
+severity = "block"
+direction = "input"
+pattern = "BUILTIN"
+description = "Conversational turn markers (Human:, Assistant:, System:) at line start — injection turn-hijacking risk."
+detect_mode = "builtin"

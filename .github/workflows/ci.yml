@@ -1,0 +1,252 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly heartbeat (Mon 06:00 UTC): catches a new RUSTSEC advisory against a
+    # frozen Cargo.lock even with zero commits — the RUSTSEC-2026-0104 failure
+    # mode. Only the lightweight `advisories` job runs on schedule.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Tool versions are PINNED, not floating: `cargo install <tool> --locked` only
+# pins the tool's own dependencies, NOT the tool version, so a breaking release
+# of just/cargo-deny/cargo-llvm-cov would otherwise break CI with no change
+# here. Bumping these is a deliberate, reviewable edit (kept fresh by Dependabot).
+# The Rust toolchain is pinned via rust-toolchain.toml and @1.96.0 below so the
+# version-sensitive trybuild snapshots stay stable.
+
+jobs:
+  advisories:
+    name: Security advisories
+    # Idle-repo heartbeat for new advisories. On push/PR the same scan runs
+    # inside `just check`, so this only adds the scheduled (and manual) cadence.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.19.4 --locked
+
+      - name: Check advisories
+        run: cargo deny check advisories
+
+  unsafe-surface:
+    name: Unsafe surface (advisory)
+    # cargo-geiger reports the unsafe surface of the dependency tree. ADVISORY —
+    # an unsafe count is a metric, not a gate, so (like the advisories heartbeat)
+    # it runs only on the weekly schedule + manual dispatch, never blocking PRs,
+    # and continue-on-error keeps it green even if cargo-geiger itself hiccups.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Install cargo-geiger
+        run: cargo install cargo-geiger --locked
+
+      - name: Report unsafe surface
+        run: just ckeletin-geiger
+
+  check:
+    name: Check
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: clippy, rustfmt, llvm-tools-preview
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.19.4 --locked
+
+      # SSOT: `just check` is the single gateway.
+      # Same checks run locally (lefthook + just) and in CI.
+      # If you add a check, add it to Justfile — CI picks it up automatically.
+      - name: Run all checks
+        run: just check
+
+  init-smoke:
+    name: Scaffold init smoke
+    # Upstream-only. This builds a fresh project from `just init` and asserts
+    # the `ping` worked example survives — true for ckeletin-rust itself, but
+    # not for derived projects (which replace ping). The guard keeps the job
+    # from failing in downstream forks while still gating `just init` here.
+    if: github.repository == 'peiman/ckeletin-rust' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-initsmoke-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      # Builds a fresh scaffold from `just init` in a temp dir and runs its full
+      # test suite — catches a non-compiling project AND a mangled test file
+      # (cargo check alone compiles only lib + bin).
+      - name: Run scaffold init smoke test
+        run: just init-smoke
+
+  coverage:
+    name: Coverage (85% min)
+    # CKSPEC-TEST-002: the 85% threshold must gate the pipeline. `just coverage`
+    # is too heavy for the local `just check` loop, so it gates here in CI.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --version 0.8.5 --locked
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Coverage (fails under 85%)
+        run: just coverage
+
+  conform:
+    name: Conformance
+    # CKSPEC-ENF-005/006/007: validate the conformance mapping covers every spec
+    # requirement (against the committed vendored snapshot — hermetic, no
+    # network), run each mapped check, and emit feedback signals.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-conform-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Conformance generator
+        run: just conform
+
+  secret-scan:
+    name: Secret scan
+    # Hard gate for hardcoded credentials. Uses the gitleaks CLI binary directly
+    # (NOT gitleaks-action, which carries a commercial EULA for org-owned repos).
+    # Pinned version, like the other CI tools — bump deliberately.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so `gitleaks git` scans every commit
+
+      - name: Install gitleaks
+        run: |
+          VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+
+      - name: Scan git history for secrets
+        run: gitleaks git -v --redact --no-banner --config .ckeletin/configs/gitleaks.toml
+
+  sbom:
+    name: SBOM (generate + scan)
+    # Supply-chain: emit a CycloneDX SBOM for the shipped binary's dependency
+    # graph and scan it for known vulnerabilities (gates on High+). The SBOM is
+    # uploaded as a build artifact for compliance/consumers.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to match rust-toolchain.toml so the dep graph resolves identically.
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-sbom-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Install just
+        run: cargo install just --version 1.50.0 --locked
+
+      - name: Install grype
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin
+
+      - name: Generate + scan SBOM (fails on High+)
+        run: just ckeletin-sbom-scan
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          if-no-files-found: warn

@@ -1,0 +1,17 @@
+[[rules]]
+id = "unicode_tags.tag_block"
+category = "unicode_tags"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "Unicode Tag block (U+E0001-U+E007F) — invisible text smuggling"
+detect_mode = "builtin"
+
+[[rules]]
+id = "unicode_tags.surrogate"
+category = "unicode_tags"
+severity = "block"
+direction = "both"
+pattern = "BUILTIN"
+description = "UTF-16 surrogate codepoints (U+D800-U+DFFF) — reconstruction defense"
+detect_mode = "builtin"

@@ -1,0 +1,385 @@
+# ckeletin framework tasks
+# These recipes are framework-owned. Do not edit — replaced on update.
+
+ckeletin_version := `cat .ckeletin/VERSION`
+
+# SSOT for the upstream identity. The workspace `repository` slug is the upstream
+# fingerprint: `just init` rewrites "peiman/ckeletin-rust" to "peiman/<project>"
+# throughout the root Cargo.toml, so a root manifest still naming this slug means
+# this IS the upstream repo. Mirrors ckeletin-go's go.mod module-path guard
+# (repository URL is the Rust analog of a Go module path).
+ckeletin_upstream_url := "https://github.com/peiman/ckeletin-rust.git"
+ckeletin_upstream_slug := "peiman/ckeletin-rust"
+
+# Show framework version and check for local modifications
+ckeletin-health:
+    @echo "ckeletin framework v{{ckeletin_version}}"
+    @if [ -z "$(git status --porcelain .ckeletin/)" ]; then \
+        echo "Status: clean"; \
+    else \
+        echo "WARNING: .ckeletin/ has local changes (incl. added files) — next update will shadow/ignore them"; \
+        git status --porcelain .ckeletin/; \
+    fi
+    @cargo check --workspace -q && echo "Workspace: compiles" || echo "Workspace: BROKEN"
+
+# Show the framework version (parity with ckeletin-go's `task version`)
+ckeletin-version:
+    @echo "ckeletin framework v{{ckeletin_version}}"
+
+# Report the development environment: framework version, toolchain, and the tools
+# the framework depends on. Informational only — always exits 0 (it reports
+# status, it does not gate the build), so it is intentionally not in `just check`.
+# Mirrors ckeletin-go's `task doctor`. Pass `json` for a machine-readable object
+# an autonomous agent can parse (`just ckeletin-doctor json`).
+ckeletin-doctor format="text":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    EXPECTED=$(grep -E '^channel' rust-toolchain.toml 2>/dev/null | sed -E 's/.*"(.*)".*/\1/')
+    MSRV=$(grep -E '^rust-version' Cargo.toml 2>/dev/null | sed -E 's/.*"(.*)".*/\1/')
+    RUSTC=$(command -v rustc >/dev/null 2>&1 && rustc --version | awk '{print $2}' || echo "")
+    if [ "{{format}}" = "json" ]; then
+        present() { command -v "$1" >/dev/null 2>&1 && printf true || printf false; }
+        printf '{"framework_version":"%s","toolchain":{"pinned":"%s","msrv":"%s","rustc":"%s"},"tools":{' \
+            "{{ckeletin_version}}" "${EXPECTED:-}" "${MSRV:-}" "${RUSTC:-}"
+        printf '"cargo-deny":%s,"cargo-llvm-cov":%s,"cargo-nextest":%s,"just":%s,"gitleaks":%s,' \
+            "$(present cargo-deny)" "$(present cargo-llvm-cov)" "$(present cargo-nextest)" "$(present just)" "$(present gitleaks)"
+        printf '"cargo-cyclonedx":%s,"grype":%s,"cargo-geiger":%s,"cargo-bolero":%s}}\n' \
+            "$(present cargo-cyclonedx)" "$(present grype)" "$(present cargo-geiger)" "$(present cargo-bolero)"
+        exit 0
+    fi
+    echo "ckeletin framework v{{ckeletin_version}}"
+    echo ""
+    echo "Toolchain:"
+    echo "  Pinned (rust-toolchain.toml): ${EXPECTED:-unknown}"
+    echo "  MSRV (Cargo.toml):            ${MSRV:-unknown}"
+    echo "  Installed rustc:              ${RUSTC:-NOT FOUND (install via https://rustup.rs)}"
+    echo ""
+    echo "Tools:"
+    report() { if command -v "$1" >/dev/null 2>&1; then echo "  $2: installed"; else echo "  $2: NOT FOUND ($3)"; fi; }
+    report cargo-deny "cargo-deny (just check)" "required: cargo install cargo-deny --locked"
+    report cargo-llvm-cov "cargo-llvm-cov (just coverage)" "required: cargo install cargo-llvm-cov --locked"
+    report cargo-nextest "cargo-nextest (just test; falls back to cargo test)" "optional: cargo install cargo-nextest --locked"
+    report just "just" "required: cargo install just --locked"
+    report gitleaks "gitleaks (just ckeletin-secrets, pre-commit)" "required: brew install gitleaks"
+    report cargo-cyclonedx "cargo-cyclonedx (just ckeletin-sbom)" "optional: cargo install cargo-cyclonedx --locked"
+    report grype "grype (just ckeletin-sbom-scan)" "optional: brew install grype"
+    report cargo-geiger "cargo-geiger (just ckeletin-geiger, advisory)" "optional: cargo install cargo-geiger --locked"
+    report cargo-bolero "cargo-bolero (coverage-guided fuzzing; bolero lib runs on stable)" "optional: cargo install cargo-bolero --locked"
+    if cargo fmt --version >/dev/null 2>&1; then echo "  rustfmt component: installed"; else echo "  rustfmt component: NOT FOUND (rustup component add rustfmt)"; fi
+    if cargo clippy --version >/dev/null 2>&1; then echo "  clippy component: installed"; else echo "  clippy component: NOT FOUND (rustup component add clippy)"; fi
+    echo ""
+    echo "Check for a newer framework version with: just ckeletin-check-update"
+
+# Framework quality checks
+ckeletin-fmt-check:
+    cargo fmt --all -- --check
+
+ckeletin-clippy:
+    # Lints applied to ALL targets (including tests) — these flag real defects
+    # wherever they appear.
+    cargo clippy --workspace --all-targets --all-features -- \
+        -D warnings \
+        -D clippy::cast_possible_truncation \
+        -D clippy::cast_sign_loss \
+        -D clippy::cast_possible_wrap \
+        -D clippy::cast_precision_loss \
+        -D clippy::lossy_float_literal \
+        -D clippy::dbg_macro \
+        -D clippy::todo \
+        -D clippy::unimplemented \
+        -D clippy::mem_forget \
+        -D clippy::rc_buffer \
+        -D clippy::verbose_file_reads \
+        -D clippy::wildcard_dependencies
+    # float_cmp is denied for library/binary code only, NOT tests: exact-sentinel
+    # assertions like `assert_eq!(score, 0.0)` on values that are 0.0/1.0 by
+    # construction are idiomatic and correct in test code. Scoping it to --lib
+    # --bins keeps the safety for real logic without fighting test assertions
+    # (workhorse adoption feedback, 2026-06-04).
+    cargo clippy --workspace --lib --bins --all-features -- -A warnings -D clippy::float_cmp
+
+ckeletin-deny:
+    cargo deny check
+
+ckeletin-check: ckeletin-fmt-check ckeletin-clippy ckeletin-deny
+
+# Scan the working tree for hardcoded secrets with gitleaks (CKSPEC-ENF-001).
+# Standalone — NOT part of `just check`, because gitleaks is an external,
+# non-cargo binary; it gates via the secret-scan CI job and the lefthook
+# pre-commit hook instead, so a missing gitleaks never blocks `just check`.
+# Install: brew install gitleaks (or https://github.com/gitleaks/gitleaks).
+# Mirrors ckeletin-go's secret scanning.
+ckeletin-secrets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v gitleaks >/dev/null 2>&1; then
+        echo "Error: gitleaks not found. Install: brew install gitleaks (https://github.com/gitleaks/gitleaks)"
+        exit 1
+    fi
+    gitleaks dir --config .ckeletin/configs/gitleaks.toml --redact --verbose
+
+# Generate a CycloneDX SBOM (sbom.cdx.json) for the CLI binary's dependency
+# graph, using cargo-cyclonedx (the official OWASP CycloneDX cargo plugin).
+# cargo-cyclonedx emits one file per workspace member next to each manifest; we
+# keep the cli crate's (the shipped app's full transitive tree) as the canonical
+# SBOM and discard the rest. Standalone — external tool, not in `just check`.
+# Install: cargo install cargo-cyclonedx --locked. Mirrors ckeletin-go's SBOM.
+ckeletin-sbom:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v cargo-cyclonedx >/dev/null 2>&1; then
+        echo "Error: cargo-cyclonedx not found. Install: cargo install cargo-cyclonedx --locked"
+        exit 1
+    fi
+    cargo cyclonedx --format json --spec-version 1.5
+    cp crates/cli/cli.cdx.json sbom.cdx.json
+    find crates .ckeletin -name '*.cdx.json' -delete
+    echo "Wrote sbom.cdx.json (CycloneDX 1.5)"
+
+# Generate the SBOM, then scan it for known vulnerabilities with grype, failing
+# on High severity or above. Install: https://github.com/anchore/grype (grype
+# downloads its vuln DB on first run, so it needs network).
+ckeletin-sbom-scan: ckeletin-sbom
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v grype >/dev/null 2>&1; then
+        echo "Error: grype not found. Install: https://github.com/anchore/grype (brew install grype)"
+        exit 1
+    fi
+    grype sbom:sbom.cdx.json --fail-on high
+
+# Report the `unsafe` Rust surface across the dependency tree with cargo-geiger.
+# ADVISORY ONLY — an unsafe count is a metric, not a pass/fail (dependencies
+# legitimately use unsafe), so this never gates `just check`. cargo-geiger builds
+# the dependency tree (slow) and is community-maintained. `--forbid-only` is the
+# fast mode: it reports which crates declare #![forbid(unsafe_code)].
+# Install: cargo install cargo-geiger --locked.
+ckeletin-geiger:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    if ! command -v cargo-geiger >/dev/null 2>&1; then
+        echo "cargo-geiger not found (advisory tool). Install: cargo install cargo-geiger --locked"
+        exit 0
+    fi
+    # cargo-geiger needs a concrete package (not the virtual workspace root) and
+    # an absolute --manifest-path. Point it at the cli crate — the shipped binary.
+    cargo geiger --forbid-only --manifest-path "$(pwd)/crates/cli/Cargo.toml" \
+        || echo "cargo-geiger exited non-zero — advisory only, not a gate."
+
+# Exercise the bolero fuzz targets on STABLE — generative testing that feeds
+# many arbitrary inputs through each target (the same engine `just check` runs,
+# invoked directly so you can iterate). This is the cross-platform, no-nightly
+# path and the one this scaffold ships working.
+#
+# Coverage-guided ACTIVE fuzzing (bolero's libfuzzer engine, `cargo bolero test`)
+# is deliberately NOT wired here: it needs nightly AND a dedicated fuzz crate
+# excluded from the workspace, because its sancov instrumentation otherwise leaks
+# into sibling test binaries (e.g. the cli integration tests) and fails to link.
+# Add such a crate when you want continuous coverage-guided fuzzing — see
+# https://github.com/camshaft/bolero. Install: cargo install cargo-bolero --locked.
+ckeletin-fuzz:
+    cargo test --workspace --test fuzz_ping
+
+# Check if a newer framework version is available. Pass `json` for a
+# machine-readable verdict ({"current","latest","update_available"}) — the
+# trigger signal for an autonomous maintenance loop.
+ckeletin-check-update format="text":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git remote | grep -q ckeletin-upstream; then
+        if [ "{{format}}" = "json" ]; then
+            printf '{"error":"no_upstream_remote","hint":"git remote add ckeletin-upstream %s"}\n' "{{ckeletin_upstream_url}}"
+        else
+            echo "No upstream remote. Run: git remote add ckeletin-upstream {{ckeletin_upstream_url}}"
+        fi
+        exit 0
+    fi
+    git fetch ckeletin-upstream -q
+    LOCAL=$(cat .ckeletin/VERSION)
+    REMOTE=$(git show ckeletin-upstream/main:.ckeletin/VERSION 2>/dev/null || echo "unknown")
+    if [ "{{format}}" = "json" ]; then
+        AVAIL=true; [ "$LOCAL" = "$REMOTE" ] && AVAIL=false
+        printf '{"current":"%s","latest":"%s","update_available":%s}\n' "$LOCAL" "$REMOTE" "$AVAIL"
+        exit 0
+    fi
+    if [ "$LOCAL" = "$REMOTE" ]; then
+        echo "Framework is up to date (v$LOCAL)"
+    else
+        echo "Update available: v$LOCAL → v$REMOTE"
+        echo "Run: just ckeletin-update"
+    fi
+
+# Update framework from upstream
+ckeletin-update version="main":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "This is the {{ckeletin_upstream_slug}} upstream repository itself — framework update does not apply here."
+        exit 0
+    fi
+    if [ -n "$(git status --porcelain .ckeletin/)" ]; then
+        echo "Error: .ckeletin/ has uncommitted changes (incl. added files). Commit or revert first."
+        exit 1
+    fi
+    OLD_VERSION=$(cat .ckeletin/VERSION)
+    if ! git remote | grep -q ckeletin-upstream; then
+        git remote add ckeletin-upstream {{ckeletin_upstream_url}}
+    fi
+    git fetch ckeletin-upstream
+    git checkout ckeletin-upstream/{{version}} -- .ckeletin/
+    NEW_VERSION=$(cat .ckeletin/VERSION)
+    cargo generate-lockfile
+    # Tier 1: must still COMPILE. A non-compiling update is incompatible — roll
+    # back fully (the framework crate or a moved API broke the build).
+    if ! cargo check --workspace; then
+        echo "Error: workspace does not compile after update. Rolling back."
+        git checkout HEAD -- .ckeletin/
+        cargo generate-lockfile
+        printf 'CKELETIN_UPDATE_RESULT={"status":"compile_failed","from":"%s","to":"%s","committed":false,"rolled_back":true}\n' "$OLD_VERSION" "$NEW_VERSION"
+        exit 1
+    fi
+    # Tier 2: must pass the SAME gate the project runs — `just check` (clippy
+    # lints, deny, tests), NOT just `cargo check`. A release can tighten the gate
+    # (e.g. new clippy lints); auto-committing a red `just check` is what bit
+    # workhorse (2026-06-04). On failure DON'T roll back and DON'T commit: the
+    # update is left in the working tree so you can fix the new violations and
+    # commit yourself.
+    if ! just check; then
+        echo ""
+        echo "Update to v$NEW_VERSION applied to the working tree, but 'just check' fails."
+        echo "This release likely tightened a gate (e.g. clippy). Fix the violations"
+        echo "above (real fix, or a reasoned #[allow]), then commit:"
+        echo "  git add .ckeletin/ Cargo.lock && git commit -m \"chore: update ckeletin framework from v$OLD_VERSION to v$NEW_VERSION\""
+        echo "Left UNCOMMITTED (not rolled back) so you can fix forward."
+        printf 'CKELETIN_UPDATE_RESULT={"status":"check_failed","from":"%s","to":"%s","committed":false,"rolled_back":false}\n' "$OLD_VERSION" "$NEW_VERSION"
+        exit 1
+    fi
+    echo ""
+    echo "Updated ckeletin framework: v$OLD_VERSION → v$NEW_VERSION"
+    echo ""
+    git diff HEAD -- .ckeletin/CHANGELOG.md || true
+    git add .ckeletin/ Cargo.lock
+    git commit -m "chore: update ckeletin framework from v$OLD_VERSION to v$NEW_VERSION"
+    # Final machine-readable verdict for an autonomous driver (workhorse).
+    printf 'CKELETIN_UPDATE_RESULT={"status":"updated","from":"%s","to":"%s","committed":true,"rolled_back":false}\n' "$OLD_VERSION" "$NEW_VERSION"
+
+# Preview update without applying
+ckeletin-update-dry-run version="main":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "This is the {{ckeletin_upstream_slug}} upstream repository itself — framework update does not apply here."
+        exit 0
+    fi
+    if ! git remote | grep -q ckeletin-upstream; then
+        git remote add ckeletin-upstream {{ckeletin_upstream_url}}
+    fi
+    git fetch ckeletin-upstream
+    LOCAL=$(cat .ckeletin/VERSION)
+    REMOTE=$(git show ckeletin-upstream/{{version}}:.ckeletin/VERSION 2>/dev/null || echo "unknown")
+    echo "Current: v$LOCAL → Available: v$REMOTE"
+    echo ""
+    echo "Files that would change:"
+    git diff HEAD..ckeletin-upstream/{{version}} --stat -- .ckeletin/
+
+# Applies the upstream .ckeletin/ to the working tree, runs the full `just check`
+# gate, then restores your committed framework (via a trap, so restoration
+# happens even on failure or interrupt). Rust needs no import rewriting — crates
+# are referenced by name, not an embedded module path. Mirrors ckeletin-go's
+# `task ckeletin:update:check-compatibility`.
+# Check if the available framework update passes `just check` against your code (no changes kept)
+ckeletin-update-check-compatibility version="main":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "This is the {{ckeletin_upstream_slug}} upstream repository itself — framework update does not apply here."
+        exit 0
+    fi
+    if [ -n "$(git status --porcelain .ckeletin/)" ]; then
+        echo "Error: .ckeletin/ has uncommitted changes (incl. added files). Commit or revert first."
+        exit 1
+    fi
+    if ! git remote | grep -q ckeletin-upstream; then
+        git remote add ckeletin-upstream {{ckeletin_upstream_url}}
+    fi
+    git fetch ckeletin-upstream
+    if [ "{{version}}" = "main" ]; then
+        CHECKOUT_REF="ckeletin-upstream/main"
+    else
+        git fetch ckeletin-upstream "{{version}}"
+        CHECKOUT_REF="FETCH_HEAD"
+    fi
+    if [ -z "$(git diff --stat HEAD "$CHECKOUT_REF" -- .ckeletin/)" ]; then
+        echo "Framework is already up to date — nothing to check."
+        exit 0
+    fi
+    # Restore the committed framework no matter how we exit. .ckeletin/ is clean
+    # (checked above), so `git checkout HEAD` is a reliable, interrupt-safe undo.
+    restore() { git checkout HEAD -- .ckeletin/ && cargo generate-lockfile; }
+    trap restore EXIT
+    git checkout "$CHECKOUT_REF" -- .ckeletin/
+    cargo generate-lockfile
+    # Run the FULL gate (`just check`), not just `cargo check` — so this also
+    # surfaces clippy/test failures a release might introduce (e.g. tightened
+    # lints), giving an early warning before `just ckeletin-update` is run.
+    echo "Checking compatibility with framework update ({{version}})..."
+    set +e
+    CHECK_OUTPUT=$(just check 2>&1)
+    CHECK_RESULT=$?
+    set -e
+    if [ "$CHECK_RESULT" -eq 0 ]; then
+        echo "Compatible — 'just check' passes against the update."
+        echo ""
+        echo "Changes available:"
+        git diff --stat HEAD "$CHECKOUT_REF" -- .ckeletin/
+        echo ""
+        echo "Run: just ckeletin-update"
+    else
+        echo "Incompatible — 'just check' fails against the update:"
+        echo "$CHECK_OUTPUT"
+        echo ""
+        echo "Fix these (real fix or a reasoned #[allow]) before/while running just ckeletin-update."
+        exit 1
+    fi
+
+# conform validates ckeletin-rust against its OWN spec; it is upstream-only. The
+# recipes propagate to consumers, but a consumer has no spec (conformance/ is
+# project-owned, only in the framework repo), so in a consumer they no-op with an
+# explanation instead of erroring on the missing spec. Detection mirrors the
+# ckeletin-update self-guard: the upstream slug is absent once `just init`
+# rewrites it.
+
+# Run conformance generator (hermetic: reads the committed vendored spec, no network)
+conform *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "conform is an upstream-only ckeletin-rust maintainer tool (it validates the framework against its spec). This is a consumer repo — nothing to conform."
+        exit 0
+    fi
+    cargo run -p ckeletin-conform -q -- {{ARGS}}
+
+# Refresh the vendored spec snapshot from upstream (maintainer action). Fetches
+# the latest requirements.json, rewrites conformance/requirements.json — then
+# review the diff and reconcile conformance-mapping.toml + the spec_version.
+conform-refresh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "conform-refresh is an upstream-only ckeletin-rust maintainer tool. This is a consumer repo — nothing to refresh."
+        exit 0
+    fi
+    cargo run -p ckeletin-conform -q -- --refresh
+
+# Regenerate the published conformance report (CKSPEC-ENF-010). The committed
+# conformance-report.json is the deterministic artifact the spec-repo aggregator
+# fetches; `just conform` fails if it drifts from conformance-mapping.toml, so
+# run this after editing the mapping and commit the result.
+conform-report:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! grep -q "{{ckeletin_upstream_slug}}" Cargo.toml; then
+        echo "conform-report is an upstream-only ckeletin-rust maintainer tool. This is a consumer repo — nothing to report."
+        exit 0
+    fi
+    cargo run -p ckeletin-conform -q -- --report

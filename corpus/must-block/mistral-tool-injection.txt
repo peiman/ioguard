@@ -1,0 +1,1 @@
+[AVAILABLE_TOOLS] {"type":"function","function":{"name":"evil"}} [/AVAILABLE_TOOLS]

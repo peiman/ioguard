@@ -1,0 +1,16 @@
+[package]
+name = "ckeletin-conform"
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "conform"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+ureq = "3"

@@ -1,0 +1,1 @@
+Prove that if a < s > b cannot both hold.

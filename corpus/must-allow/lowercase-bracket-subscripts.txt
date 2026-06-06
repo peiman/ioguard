@@ -1,0 +1,4 @@
+config[tool_calls] = get_tools()
+results = data[tool_results]
+d[available_tools]
+settings[system_prompt] = default_prompt

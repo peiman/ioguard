@@ -1,0 +1,74 @@
+name: Spec drift
+
+# CKSPEC-ENF-009 (the "verify against latest" half).
+#
+# `just conform` is deliberately hermetic: it gates against the committed
+# vendored spec snapshot (conformance/requirements.json) so CI is reproducible
+# and offline. That is a documented divergence from ckeletin-go, whose conform
+# live-fetches the spec. This scheduled job is the counterweight — it compares
+# the LIVE upstream spec_version against the vendored one and opens a tracking
+# issue when upstream advances, so a stale snapshot can't silently hide a new
+# requirement between releases.
+
+on:
+  schedule:
+    # Weekly (Mon 07:00 UTC), an hour after the advisories heartbeat in ci.yml.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  spec-drift:
+    name: Detect upstream spec drift
+    # Upstream-only: derived projects vendor their own spec and don't track
+    # ckeletin's cadence.
+    if: github.repository == 'peiman/ckeletin-rust'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read versions
+        id: versions
+        run: |
+          set -euo pipefail
+          UPSTREAM_URL="https://raw.githubusercontent.com/peiman/ckeletin/main/spec/requirements.json"
+          # `jq -e` exits non-zero if spec_version is null/missing, so a malformed
+          # upstream payload aborts the step (set -e + pipefail) rather than
+          # comparing against the literal "null" and filing a misleading issue.
+          vendored=$(jq -er '.spec_version' conformance/requirements.json)
+          upstream=$(curl -fsSL "$UPSTREAM_URL" | jq -er '.spec_version')
+          echo "vendored=$vendored" >> "$GITHUB_OUTPUT"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "vendored=$vendored upstream=$upstream"
+
+      - name: Open tracking issue on drift
+        if: steps.versions.outputs.vendored != steps.versions.outputs.upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VENDORED: ${{ steps.versions.outputs.vendored }}
+          UPSTREAM: ${{ steps.versions.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          TITLE="spec drift: upstream ckeletin is v${UPSTREAM} (vendored v${VENDORED})"
+          # Dedup: skip if an open issue with this exact title already exists.
+          existing=$(gh issue list --state open --search "in:title spec drift" \
+            --json title --jq '.[].title' | grep -xF "$TITLE" || true)
+          if [ -n "$existing" ]; then
+            echo "Tracking issue already open: $TITLE"
+            exit 0
+          fi
+          BODY=$(printf '%s\n' \
+            "The upstream ckeletin spec has advanced past the vendored snapshot." \
+            "" \
+            "- Vendored \`conformance/requirements.json\`: **v${VENDORED}**" \
+            "- Upstream \`spec/requirements.json\`: **v${UPSTREAM}**" \
+            "" \
+            "Run \`just conform-refresh\` to pull the new snapshot, reconcile" \
+            "\`conformance-mapping.toml\` (and its \`spec_version\`), then regenerate" \
+            "the published report with \`just conform-report\`." \
+            "" \
+            "_Opened automatically by the spec-drift workflow (CKSPEC-ENF-009)._")
+          gh issue create --title "$TITLE" --body "$BODY"

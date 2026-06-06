@@ -1,0 +1,35 @@
+# cargo-deny configuration (CKSPEC-ENF-001)
+# v0.19+ format: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CDLA-Permissive-2.0",
+    # cbindgen (build-only dep) is MPL-2.0; file-level copyleft, does not
+    # affect distributed binary licensing because cbindgen runs only at
+    # build time and is not linked into any release artifact.
+    "MPL-2.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[advisories]
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

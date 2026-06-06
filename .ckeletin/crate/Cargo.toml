@@ -1,0 +1,19 @@
+[package]
+name = "ckeletin"
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+figment = { version = "0.10", features = ["toml", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+serde_json = "1"

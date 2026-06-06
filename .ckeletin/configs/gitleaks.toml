@@ -1,0 +1,22 @@
+# gitleaks configuration — secret scanning (CKSPEC-ENF-001).
+#
+# Framework-owned: this file is replaced on `just ckeletin-update`. To add
+# project-specific allowlist entries without losing them on update, create a
+# root-level `.gitleaks.toml` with `[extend] path = ".ckeletin/configs/gitleaks.toml"`,
+# or use inline `#gitleaks:allow` comments / a `.gitleaksignore` fingerprint file.
+#
+# Used by `just ckeletin-secrets` and the secret-scan CI job. Extends gitleaks'
+# built-in ruleset rather than replacing it.
+title = "ckeletin gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Framework-level allowlist"
+# Never scan build output or VCS internals — they contain no source secrets and
+# scanning them is slow (target/ alone is ~1 GB).
+paths = [
+    '''(^|/)target/''',
+    '''(^|/)\.git/''',
+]

@@ -1,0 +1,19 @@
+[package]
+name = "ioguard-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ioguard"
+path = "src/main.rs"
+
+[dependencies]
+ioguard-core = { path = "../ioguard-core" }
+clap = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

@@ -1,0 +1,11 @@
+language = "C"
+include_guard = "IOGUARD_H"
+sys_includes = ["stdint.h", "stddef.h", "stdbool.h"]
+no_includes = false
+usize_is_size_t = true
+
+[export]
+include = ["ioguard_scan", "ioguard_free"]
+
+[fn]
+args = "vertical"

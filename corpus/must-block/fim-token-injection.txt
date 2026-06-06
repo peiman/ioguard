@@ -1,0 +1,1 @@
+<|fim_prefix|>def secret():<|fim_suffix|>
