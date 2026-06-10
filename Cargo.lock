@@ -425,7 +425,7 @@ checksum = "c8fae54786f62fb2918dcfae3d568594e50eb9b5c25bf04371af6fe7516452fb"
 
 [[package]]
 name = "ioguard-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "ioguard-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "icu_properties",
  "icu_properties_data",
@@ -451,7 +451,7 @@ dependencies = [
 
 [[package]]
 name = "ioguard-ffi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cbindgen",
  "ioguard-core",
