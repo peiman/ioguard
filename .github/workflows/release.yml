@@ -16,8 +16,9 @@ on:
     tags:
       - "v*"
 
+# Least-privilege default; publish overrides to contents: write for release upload.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +28,7 @@ jobs:
     name: Conformance gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
       - uses: dtolnay/rust-toolchain@1.96.0
@@ -38,12 +39,43 @@ jobs:
       - name: Conformance gate (must be green to release)
         run: just conform
 
+      # Tag-version reconciliation gate: the pushed tag (vX.Y.Z) must equal the
+      # cli package's CARGO_PKG_VERSION baked into the binary. Prevents the
+      # repo-history incident where tag v0.2.0 was cut from package version 0.1.0.
+      # Tag-namespace note: future ckeletin framework pins may use a ckeletin-v*
+      # prefix to distinguish them from binary release tags (v*) — that separation
+      # is policy; this gate only enforces binary release tags.
+      - name: Verify tag matches CARGO_PKG_VERSION
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          # Select the bin package structurally (by bin target) rather than by a
+          # literal package name — rename-proof: works regardless of what the
+          # consumer calls their CLI crate.
+          PKG_VERSION=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.targets[]? | .kind[]? == "bin") | .version' \
+            | head -1)
+          if [ -z "$PKG_VERSION" ]; then
+            echo "ERROR: could not resolve bin package version from cargo metadata" >&2
+            exit 1
+          fi
+          echo "Tag version:     $TAG"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "ERROR: git tag v${TAG} does not match bin package version ${PKG_VERSION}." >&2
+            echo "       Update Cargo.toml [workspace.package] version to ${TAG} before tagging." >&2
+            exit 1
+          fi
+          echo "OK: tag matches package version."
+
   publish:
     name: Publish release
     needs: conform
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create the GitHub release and upload assets
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       # Pinned to match rust-toolchain.toml so trybuild snapshots stay stable.
       - uses: dtolnay/rust-toolchain@1.96.0
@@ -53,6 +85,29 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
+      - name: Resolve binary name and generate checksums
+        run: |
+          set -euo pipefail
+          # Derive the binary name from the workspace metadata structurally —
+          # select the package with a bin target, then extract the bin target
+          # name. Does NOT match on a literal package name like "cli" or
+          # "ckeletin-rust", so this is rename-proof across all consumers.
+          BIN=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.targets[]? | .kind[]? == "bin") | .targets[] | select(.kind[] == "bin") | .name' \
+            | head -1)
+          if [ -z "$BIN" ]; then
+            echo "ERROR: could not resolve binary name from cargo metadata" >&2
+            exit 1
+          fi
+          echo "Binary resolved: $BIN"
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+
+          # Generate sha256 checksums for the release artifact.
+          cd target/release
+          sha256sum "$BIN" > "${BIN}.sha256"
+          echo "Checksums:"
+          cat "${BIN}.sha256"
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,4 +116,5 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            target/release/ckeletin-rust
+            "target/release/${BIN}" \
+            "target/release/${BIN}.sha256"

@@ -1,0 +1,97 @@
+# .gitleaksignore — allowlist for gitleaks false-positive fingerprints.
+#
+# All entries below are from ioguard's own test fixtures and detector-pattern
+# code — not real credentials. ioguard is a secret-detection tool: it must
+# contain examples of the patterns it detects, which naturally triggers the
+# same rules it implements.
+#
+# Groups:
+#   A. crates/ioguard-core/src/detectors/secret.rs
+#      — unit-test vectors and PEM/key pattern literals embedded in the
+#        detector implementation. Most literals are already split via .concat()
+#        to avoid false-positives in most scanners; a subset remains detectable.
+#
+#   B. corpus/must-block/
+#      — synthetic test fixtures used for integration / acceptance testing.
+#        Each file holds exactly one credential-shaped string so the test suite
+#        can assert ioguard blocks it.
+#
+#   C. rules/secret.toml
+#      — gitleaks-compatible rule definitions that include example / description
+#        strings matching the rules they define.
+#
+#      — AI-generated work notes (planning artefacts) that quoted example
+#        credential strings during initial project scaffolding. These files are
+#        not shipped; they are in-repo documentation only.
+#
+# Note: the CI secret-scan job runs on push/PR only
+# (if: github.event_name != 'schedule'). The weekly scheduled run
+# intentionally skips secret scanning — it only runs cargo-deny advisories.
+# This asymmetry is by design, not config drift.
+
+# ── Group A: crates/ioguard-core/src/detectors/secret.rs ─────────────────────
+# Commit f6d6ca171c79becf4665120690469c92338756ac
+f6d6ca171c79becf4665120690469c92338756ac:crates/ioguard-core/src/detectors/secret.rs:private-key:167
+f6d6ca171c79becf4665120690469c92338756ac:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:159
+
+# Commit 82b8bdef71fae4931d25cda6fea9f511807ed1cd
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:private-key:327
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:private-key:346
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:private-key:352
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:458
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:468
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:469
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:470
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:471
+
+# Commit e99fc4c6df762a788a463e2661a536fbd495b20a
+e99fc4c6df762a788a463e2661a536fbd495b20a:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:520
+e99fc4c6df762a788a463e2661a536fbd495b20a:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:532
+e99fc4c6df762a788a463e2661a536fbd495b20a:crates/ioguard-core/src/detectors/secret.rs:stripe-access-token:539
+
+# Commit f94f5db23e632d1b9e32625bff0482051ecd21b5
+f94f5db23e632d1b9e32625bff0482051ecd21b5:crates/ioguard-core/src/detectors/secret.rs:private-key:563
+
+# Commit d4d8a784714c140e2b479c07678e5cc8c7e2a8c9
+d4d8a784714c140e2b479c07678e5cc8c7e2a8c9:crates/ioguard-core/src/detectors/secret.rs:private-key:648
+d4d8a784714c140e2b479c07678e5cc8c7e2a8c9:crates/ioguard-core/src/detectors/secret.rs:private-key:659
+
+# Commit 1e563048a5bbe84aa563a8ee616a291067cd5b8b
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:crates/ioguard-core/src/detectors/secret.rs:gitlab-pat:778
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:crates/ioguard-core/src/detectors/secret.rs:private-key:787
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:crates/ioguard-core/src/detectors/secret.rs:slack-app-token:717
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:crates/ioguard-core/src/detectors/secret.rs:slack-bot-token:709
+
+# Commit 8e408f207597a0b6f1ef34e09df787b27236404a
+8e408f207597a0b6f1ef34e09df787b27236404a:crates/ioguard-core/src/detectors/secret.rs:gitlab-pat:881
+8e408f207597a0b6f1ef34e09df787b27236404a:crates/ioguard-core/src/detectors/secret.rs:gitlab-runner-authentication-token:855
+8e408f207597a0b6f1ef34e09df787b27236404a:crates/ioguard-core/src/detectors/secret.rs:gitlab-runner-authentication-token:868
+8e408f207597a0b6f1ef34e09df787b27236404a:crates/ioguard-core/src/detectors/secret.rs:slack-legacy-workspace-token:814
+8e408f207597a0b6f1ef34e09df787b27236404a:crates/ioguard-core/src/detectors/secret.rs:slack-legacy-workspace-token:827
+
+# Commit a02a2a811064e3f60429be7e4f529f477df8a5b0
+a02a2a811064e3f60429be7e4f529f477df8a5b0:crates/ioguard-core/src/detectors/secret.rs:private-key:1103
+
+# Commit 733c4a07750a9488744a57a4d5c8bb399afa2645 (HEAD of main when branch was cut)
+733c4a07750a9488744a57a4d5c8bb399afa2645:crates/ioguard-core/src/detectors/secret.rs:private-key:750
+733c4a07750a9488744a57a4d5c8bb399afa2645:crates/ioguard-core/src/detectors/secret.rs:private-key:1120
+
+# ── Group B: corpus/must-block/ ───────────────────────────────────────────────
+# Synthetic single-credential test fixtures; each is a minimal example to
+# assert ioguard blocks that pattern. Not real credentials.
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:corpus/must-block/gitlab-pat.txt:gitlab-pat:1
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:corpus/must-block/slack-app-token.txt:slack-app-token:1
+1e563048a5bbe84aa563a8ee616a291067cd5b8b:corpus/must-block/slack-bot-token.txt:slack-bot-token:1
+82b8bdef71fae4931d25cda6fea9f511807ed1cd:corpus/must-block/stripe-restricted-key.txt:stripe-access-token:1
+8e408f207597a0b6f1ef34e09df787b27236404a:corpus/must-block/gitlab-runner-auth-token.txt:gitlab-runner-authentication-token:1
+8e408f207597a0b6f1ef34e09df787b27236404a:corpus/must-block/slack-token-xoxa.txt:slack-legacy-workspace-token:1
+8e408f207597a0b6f1ef34e09df787b27236404a:corpus/must-block/slack-token-xoxr.txt:slack-legacy-workspace-token:1
+
+# ── Group C: rules/secret.toml ────────────────────────────────────────────────
+# Rule definition file; contains example/description strings that match the
+# rules they document.
+733c4a07750a9488744a57a4d5c8bb399afa2645:rules/secret.toml:gitlab-runner-authentication-token:187
+8e408f207597a0b6f1ef34e09df787b27236404a:rules/secret.toml:gitlab-runner-authentication-token:180
+
+# AI-generated planning/notes artefacts from initial development; they quoted
+# example credential-shaped strings. Not shipped code.

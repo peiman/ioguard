@@ -3,6 +3,27 @@
 All notable changes to ioguard are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com); versions follow [SemVer](https://semver.org).
 
+## [0.1.1] - 2026-06-10
+
+Release-pipeline fix. v0.1.0 was tagged but published **no downloadable
+artifacts** — the release workflow referenced the wrong binary name and failed
+before upload. This release makes `git tag v*` actually publish.
+
+### Fixed
+- **Release artifacts now publish.** The GitHub release for a version tag now
+  builds and attaches the `ioguard` binary plus its `.sha256` checksum. The
+  binary name is derived structurally from `cargo metadata`, so it stays correct
+  across renames (no hardcoded path to drift). A tag-vs-`CARGO_PKG_VERSION` gate
+  refuses to release a tag whose version doesn't match the crate.
+- **CI no longer flags ioguard's own detector patterns as leaked secrets.** The
+  secret-detector's built-in API-key/PEM patterns and the `must-block` test
+  corpus are fingerprint-allowlisted, so the secret-scan and SBOM jobs pass on
+  pull requests (previously every PR went red, blocking dependency updates).
+
+### Security
+- No detector behavior changed. ioguard scans exactly as in 0.1.0; this release
+  only repairs the release and CI pipelines.
+
 ## [0.1.0] - 2026-06-06
 
 First release. A deterministic LLM-I/O safety scanner — CLI, Rust library, and C-ABI from
