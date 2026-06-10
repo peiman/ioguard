@@ -20,7 +20,6 @@
 #      — gitleaks-compatible rule definitions that include example / description
 #        strings matching the rules they define.
 #
-#   D. .workhorse/phases/
 #      — AI-generated work notes (planning artefacts) that quoted example
 #        credential strings during initial project scaffolding. These files are
 #        not shipped; they are in-repo documentation only.
@@ -94,11 +93,5 @@ a02a2a811064e3f60429be7e4f529f477df8a5b0:crates/ioguard-core/src/detectors/secre
 733c4a07750a9488744a57a4d5c8bb399afa2645:rules/secret.toml:gitlab-runner-authentication-token:187
 8e408f207597a0b6f1ef34e09df787b27236404a:rules/secret.toml:gitlab-runner-authentication-token:180
 
-# ── Group D: .workhorse/phases/ ───────────────────────────────────────────────
 # AI-generated planning/notes artefacts from initial development; they quoted
 # example credential-shaped strings. Not shipped code.
-8f32612ac90244119a17a4980fc83fa0c880cd6d:.workhorse/phases/ioguard-20260605T132406Z/01-reviewer.md:private-key:21
-8f32612ac90244119a17a4980fc83fa0c880cd6d:.workhorse/phases/ioguard-20260605T132406Z/01-reviewer.md:stripe-access-token:27
-8f32612ac90244119a17a4980fc83fa0c880cd6d:.workhorse/phases/ioguard-20260605T190600Z/01-validator.md:private-key:40
-8f32612ac90244119a17a4980fc83fa0c880cd6d:.workhorse/phases/ioguard-20260605T190600Z/01-validator.md:private-key:43
-8f32612ac90244119a17a4980fc83fa0c880cd6d:.workhorse/phases/ioguard-20260605T190600Z/01-validator.md:private-key:45
