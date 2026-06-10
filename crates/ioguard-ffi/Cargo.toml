@@ -16,7 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [build-dependencies]
-cbindgen = "0.28"
+cbindgen = "0.29"
 
 [dev-dependencies]
 serde_json = { workspace = true }
