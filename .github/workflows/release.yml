@@ -61,4 +61,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            target/release/ckeletin-rust
+            target/release/ioguard
